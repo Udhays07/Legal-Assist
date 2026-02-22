@@ -34,128 +34,69 @@ backend/
 │   │   └── resource.py           # Resource-related request/response schemas
 │   │
 │   ├── api/                       # API route definitions
-│   │   ├── admin/                # Administrative endpoints
-│   │   │   └── resources.py      # Admin resource management
-│   │   │
-│   │   ├── user/                 # User-facing endpoints
-│   │   │   └── interaction.py    # User interactions and AI features
-│   │   │
-│   │   └── auth.py               # Authentication endpoints
-│   │
-│   ├── services/                  # Business logic layer
-│   │   ├── resource_service.py   # Resource management business logic
-│   │   ├── interaction_service.py # AI interaction and RAG business logic
-│   │   └── user_service.py       # User management business logic
-│   │
-│   ├── rag/                       # RAG and AI components (optional)
-│   │   ├── embeddings.py         # Text embedding generation
-│   │   └── retriever.py          # Content retrieval and search
-│   │
-│   └── utils/                     # Utility functions
-│       └── helpers.py            # Common helper functions
-│
-├── tests/                         # Test cases
-│
-├── requirements.txt               # Python dependencies
-└── README.md                     # This file
+"""
+Backend — Legal Assistant
+
+Concise documentation for the Backend service (FastAPI + SQLAlchemy).
+"""
+
+## Quickstart
+
+1. Create and activate a virtual environment inside `Backend`:
+
+```powershell
+cd Backend
+python -m venv .venv
+.\.venv\Scripts\activate
 ```
 
-## Role System Architecture
+2. Install dependencies:
 
-### Admin Role Interactions
-- **Content Management**: Full CRUD operations on all resources
-- **User Management**: Create, update, and manage user accounts
-- **System Analytics**: Access to usage statistics and performance metrics
-- **Bulk Operations**: Batch processing of resources and data
-- **System Configuration**: Modify system settings and permissions
+```powershell
+pip install -r requirements.txt
+```
 
-### User Role Interactions
-- **Content Access**: View and interact with published, accessible resources
-- **AI Interactions**: Chat with AI using RAG-enhanced responses
-- **Search & Discovery**: Semantic search across available content
-- **Personal Management**: Manage bookmarks, preferences, and interaction history
-- **Recommendations**: Receive personalized content suggestions
+3. Configure environment variables: copy `.env.example` to `.env` and update `DATABASE_URL`.
 
-## System Extensions
+4. Run migrations and seed initial data:
 
-The architecture supports easy extension in several areas:
+```powershell
+alembic upgrade head
+python -m app.models.seed_roles
+```
 
-### AI and Analytics
-- **RAG Enhancement**: Add more sophisticated retrieval strategies
-- **ML Models**: Integration with custom machine learning models
-- **Analytics Dashboard**: Real-time usage metrics and insights
-- **Recommendation Engine**: Advanced collaborative filtering algorithms
+5. Start the development server:
 
-### Content Management
-- **File Processing**: Support for additional document types and formats
-- **Version Control**: Document revision tracking and management
-- **Workflow Systems**: Content approval and publishing workflows
-- **Integration APIs**: Connect with external content management systems
+```powershell
+uvicorn app.main:app --reload
+```
 
-### Communication Features
-- **Real-time Chat**: WebSocket-based live interactions
-- **Notification System**: Email, SMS, and in-app notifications
-- **Collaboration Tools**: Multi-user editing and sharing capabilities
-- **API Integrations**: Third-party service connections
+## Project layout (important files)
 
-## Technical Architecture
+- `app/main.py` — FastAPI application entrypoint
+- `app/core/database.py` — SQLAlchemy engine, session and Base
+- `app/models/` — SQLAlchemy models
+- `app/schemas/` — Pydantic request/response schemas
+- `app/api/` — API route modules and routers
+- `alembic/` — Alembic configuration and migrations
+- `requirements.txt` — Python dependencies
 
-### Database Layer
-- **ORM**: SQLAlchemy with async support for database operations
-- **Models**: Comprehensive entity relationships with audit trails
-- **Migrations**: Version-controlled database schema changes
-- **Optimization**: Query optimization and connection pooling
+## Migrations & Seeding
 
-### Security Layer
-- **Authentication**: JWT-based token authentication with refresh capabilities
-- **Authorization**: Role-based access control with fine-grained permissions
-- **Session Management**: Secure session tracking and management
-- **Data Protection**: Encryption and secure data handling practices
+- Use Alembic for schema changes. Autogenerate with:
 
-### API Layer
-- **REST API**: RESTful endpoints following OpenAPI 3.0 standards
-- **Validation**: Comprehensive request/response validation with Pydantic
-- **Documentation**: Auto-generated API documentation with examples
-- **Error Handling**: Consistent error responses and logging
+```powershell
+alembic revision --autogenerate -m "message"
+```
 
-### Business Logic Layer
-- **Service Pattern**: Separation of concerns with service-oriented architecture
-- **Transaction Management**: Atomic operations and rollback capabilities
-- **Caching Strategy**: Performance optimization through intelligent caching
-- **Integration Points**: Clean interfaces for external service integration
+- Apply migrations with `alembic upgrade head` and then run the seed script for roles.
 
-## Development Guidelines
+## Notes
 
-### Code Organization
-- Follow the established folder structure for consistency
-- Implement proper separation between API routes, business logic, and data access
-- Use dependency injection for database sessions and service dependencies
-- Maintain comprehensive docstrings and type hints
+- Default `DATABASE_URL` is read from `.env`.
+- Roles (`admin`, `user`) are seeded by `app.models.seed_roles` and are intended to be immutable at the application level.
 
-### Security Considerations
-- Always validate user permissions before data access or modifications
-- Implement rate limiting and request throttling for API endpoints
-- Use parameterized queries to prevent SQL injection attacks
-- Implement proper error handling to avoid information leakage
-
-### Testing Strategy
-- Unit tests for service layer business logic
-- Integration tests for API endpoints and database operations
-- Mock external dependencies for isolated testing
-- Performance testing for critical path operations
-
-### Deployment Considerations
-- Environment-specific configuration management
-- Database migration strategies for production updates
-- Monitoring and logging setup for operational visibility
-- Scalability planning for horizontal scaling requirements
-
-## Getting Started
-
-1. **Environment Setup**: Configure Python environment and install dependencies
-2. **Database Setup**: Initialize database and run migrations
-3. **Configuration**: Set up environment variables and application settings
-4. **Development Server**: Start the FastAPI development server
-5. **API Testing**: Use the auto-generated docs at `/docs` for API exploration
-
-This backend system provides a solid foundation for knowledge management applications with room for extensive customization and feature enhancement based on specific project requirements.
+If you want, I can:
+- Add a `.env.example` file
+- Create a small script to automate venv creation, install, migrate and seed
+- Add common curl examples for the category/document endpoints
