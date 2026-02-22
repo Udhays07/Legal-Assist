@@ -14,11 +14,26 @@ System Dependencies:
 """
 
 from fastapi import FastAPI
+from app.api import category, document
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="Backend API System",
     description="Role-based backend system with resource management and intelligent interactions",
     version="1.0.0"
+)
+
+# Register routers
+app.include_router(category.router)
+app.include_router(document.router)
+
+# Minimal CORS for development (adjust in production)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.get("/health")

@@ -1,37 +1,61 @@
 """
-Database configuration, connection management, and session handling.
+Database configuration and session management for the Legal Assistant backend.
 
-This module provides database connectivity using SQLAlchemy with async support,
-session management, and database initialization utilities. It abstracts
-database operations and provides a clean interface for data access layers.
+This module sets up the SQLAlchemy engine, session factory, and declarative base for ORM models.
+It also provides a dependency function for FastAPI routes to access a database session.
 
-Purpose:
-- Configure async SQLAlchemy engine and session management
-- Handle database connection pooling and lifecycle
-- Provide dependency injection for database sessions
-- Support multiple database backends (SQLite, PostgreSQL, MySQL)
-- Manage database migrations and schema creation
-- Implement connection health checking and monitoring
-
-System Dependencies:
-- Depends on: core.config for database connection settings  
-- Depended by: All data access layers (models, services)
-- Depended by: main.py for database initialization
-- Depended by: API routes that require database sessions
-
-Key Components:
-- Async SQLAlchemy engine configuration
-- Database session factory and dependency injection
-- Connection pool management and optimization
-- Database initialization and migration support
-- Health checking and monitoring utilities
-- Multi-database backend support
+Usage:
+    - Import Base in your models to define ORM classes.
+    - Use get_db as a dependency in FastAPI endpoints to get a session.
+    - The database connection URL is loaded from the .env file.
 """
 
-# TODO: Implement database configuration
-# - Set up async SQLAlchemy engine with proper connection pooling
-# - Create session factory for dependency injection
-# - Implement database initialization and migration support
-# - Add health checking and connection monitoring
-# - Configure support for multiple database backends
-# - Set up proper error handling and connection recovery
+import os
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+# Naming convention for constraints so Alembic produces deterministic names
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Get the database URL from environment variables
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Create the SQLAlchemy engine for PostgreSQL connection
+engine = create_engine(DATABASE_URL)
+
+# Create a configured "Session" class
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Create a MetaData object with naming convention and declarative Base
+metadata = MetaData(naming_convention=NAMING_CONVENTION)
+Base = declarative_base(metadata=metadata)
+
+def get_db():
+    """
+    FastAPI dependency that provides a SQLAlchemy database session.
+
+    Yields:
+        db (Session): SQLAlchemy session object.
+
+    Ensures the session is closed after the request is handled.
+    Usage example:
+        @app.get("/items/")
+        def read_items(db: Session = Depends(get_db)):
+            ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
