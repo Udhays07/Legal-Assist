@@ -14,29 +14,84 @@ Supports listing by category via query parameter `category_id` and basic
 filters for status and tags.
 """
 
+import json
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from datetime import datetime
 
 from app.core.database import get_db
 from app.models.admin import Document
-from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
+from app.schemas.document import DocumentRead, DocumentUpdate
+from app.utils.file_extractor import extract_text, UnsupportedFileTypeError, ContentTooShortError, FileExtractionError
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 @router.post("/", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
-def create_document(payload: DocumentCreate, db: Session = Depends(get_db)):
-    """Create a new document."""
+def create_document(
+    category_id: UUID = Form(...),
+    title: str = Form(...),
+    content: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),  # Expects JSON string like '["a", "b"]'
+    doc_status: str = Form("published", alias="status"),
+    created_by: Optional[UUID] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new document.
+    
+    Accepts content either as a plain string in the 'content' field 
+    OR as an uploaded file in the 'file' field. If a file is provided, 
+    its text content is extracted and validated.
+    """
+    final_content = content
+
+    # 1. If file is provided, extract its content
+    if file:
+        try:
+            file_bytes = file.file.read()
+            final_content = extract_text(file.filename, file_bytes)
+        except (UnsupportedFileTypeError, ContentTooShortError, FileExtractionError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(e)
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unexpected error processing file: {str(e)}"
+            )
+    
+    # 2. Check if we have any content at all
+    if not final_content or not final_content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No content found. Please provide text content or upload a file."
+        )
+
+    # 3. Parse tags if provided as JSON string
+    parsed_tags = None
+    if tags:
+        try:
+            parsed_tags = json.loads(tags)
+            if not isinstance(parsed_tags, list):
+                parsed_tags = [str(parsed_tags)]
+        except json.JSONDecodeError:
+            parsed_tags = [tags]
+
+    # 4. Create and persist document
     doc = Document(
-        category_id=payload.category_id,
-        title=payload.title,
-        content=payload.content,
-        tags=payload.tags,
-        metadata_json=payload.metadata,
-        status=payload.status,
-        created_by=payload.created_by,
+        category_id=category_id,
+        title=title,
+        content=final_content,
+        tags=parsed_tags,
+        metadata_json=None,  # Not currently exposure in form
+        status=doc_status,
+        created_by=created_by,
     )
     db.add(doc)
     db.commit()

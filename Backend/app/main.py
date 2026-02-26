@@ -13,9 +13,16 @@ System Dependencies:
 - Depended by: ASGI server (uvicorn, gunicorn) for application serving
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from app.api import category, document
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Backend API System",
@@ -23,9 +30,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Log validation errors and return them to the client for debugging."""
+    content_type = request.headers.get("Content-Type", "Missing")
+    logger.error(f"Validation error: {exc.errors()} | Content-Type: {content_type}")
+    # Using str() on exc.body is safer than indexing for some linters
+    body_str = str(exc.body)
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(), 
+            "content_type": content_type,
+            "body_preview": body_str
+        },
+    )
+
+
+
 # Register routers
 app.include_router(category.router)
 app.include_router(document.router)
+
 
 # Minimal CORS for development (adjust in production)
 app.add_middleware(

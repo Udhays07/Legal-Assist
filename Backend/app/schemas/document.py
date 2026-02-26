@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 from uuid import UUID
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from pydantic import ConfigDict
 
 
@@ -49,15 +49,28 @@ class DocumentUpdate(BaseModel):
 
 
 class DocumentRead(DocumentBase):
-    """Schema returned by the API for Document resources."""
+    """Schema returned by the API for Document resources.
+
+    ``metadata`` is aliased to the ORM attribute ``metadata_json`` because
+    SQLAlchemy's declarative base exposes its own ``Base.metadata`` (a
+    ``MetaData`` object) on every model, shadowing any column named ``metadata``.
+    The column attribute was intentionally named ``metadata_json`` to avoid this
+    clash; the alias restores the public API field name to ``metadata``.
+    """
 
     id: UUID
     created_by: Optional[UUID]
     created_at: datetime
     updated_at: Optional[datetime]
     deleted_at: Optional[datetime]
+    # Read from `metadata_json` on the ORM model; serialize as `metadata` in JSON.
+    metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        validation_alias=AliasChoices("metadata_json", "metadata"),
+        description="Optional structured metadata",
+    )
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class DocumentListItem(DocumentRead):

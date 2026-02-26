@@ -69,7 +69,7 @@ class Document(Base):
     tags = Column(ARRAY(String), nullable=True)
     # 'metadata' is a reserved attribute name on Declarative base (Base.metadata).
     # Use a different attribute name but keep the column name as 'metadata' in the DB.
-    # metadata_json = Column('metadata', JSONB, nullable=True)
+    metadata_json = Column('metadata', JSONB, nullable=True)
     status = Column(String, server_default="published", nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
