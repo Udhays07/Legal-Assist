@@ -1,4 +1,7 @@
 # Backend requirements for Legal Assistant
+# Python 3.12.0 compatible versions
+
+# Core Framework
 fastapi==0.110.0
 uvicorn[standard]==0.29.0
 SQLAlchemy==2.0.29
@@ -17,3 +20,11 @@ python-docx==1.1.2
 openpyxl==3.1.2
 python-pptx==0.6.23
 chardet==5.2.0
+
+# Vector embeddings and search (Python 3.12 compatible)
+sentence-transformers==3.0.1
+pgvector==0.3.2
+torch==2.3.1
+numpy==1.26.4
+transformers==4.41.2
+huggingface-hub==0.23.4

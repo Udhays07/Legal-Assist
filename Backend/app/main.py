@@ -17,17 +17,47 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from app.api import category, document
+from app.api import embeddings_health
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager for startup and shutdown events.
+    Preloads the embedding model on startup for faster first request.
+    """
+    # Startup: Preload embedding model
+    logger.info("🚀 Starting application...")
+    logger.info("📦 Preloading embedding model...")
+    
+    try:
+        from app.services.embedding_service import get_embedding_model
+        model = get_embedding_model()
+        logger.info(f"✓ Embedding model loaded successfully: {model.get_sentence_embedding_dimension()} dimensions")
+    except Exception as e:
+        logger.error(f"✗ Failed to preload embedding model: {str(e)}")
+        logger.warning("⚠️  Model will be loaded on first use")
+    
+    logger.info("✓ Application startup complete")
+    
+    yield
+    
+    # Shutdown: Cleanup if needed
+    logger.info("👋 Shutting down application...")
+
+
 app = FastAPI(
     title="Backend API System",
     description="Role-based backend system with resource management and intelligent interactions",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 @app.exception_handler(RequestValidationError)
@@ -47,10 +77,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-
 # Register routers
 app.include_router(category.router)
 app.include_router(document.router)
+app.include_router(embeddings_health.router)
 
 
 # Minimal CORS for development (adjust in production)

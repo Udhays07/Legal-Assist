@@ -13,6 +13,7 @@ All models use UUID primary keys and timestamp fields for audit and soft delete 
 from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, ARRAY, Index, func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 import uuid
 from ..core.database import Base
 
@@ -36,7 +37,7 @@ class User(Base):
     name = Column(String, nullable=False)
     role_id = Column(UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, nullable=True, server_onupdate=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
     role = relationship("Role", back_populates="users")
     documents = relationship("Document", back_populates="creator")
@@ -52,7 +53,7 @@ class Category(Base):
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, nullable=True, server_onupdate=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
     documents = relationship("Document", back_populates="category")
 
@@ -73,7 +74,7 @@ class Document(Base):
     status = Column(String, server_default="published", nullable=False)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, nullable=True, server_onupdate=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
     category = relationship("Category", back_populates="documents")
     creator = relationship("User", back_populates="documents")
@@ -84,11 +85,12 @@ class Document(Base):
 
 class DocumentEmbedding(Base):
     """
-    (Optional) Document embedding for vector search support.
+    Document embedding for vector search support using pgvector.
     Embedding should be updated on document update and removed on soft delete.
+    Uses all-mpnet-base-v2 model (768 dimensions).
     """
     __tablename__ = "document_embeddings"
     document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), primary_key=True)
-    embedding = Column(JSONB, nullable=False)  # Use JSONB for embedding storage; swap for pgvector later
-    updated_at = Column(DateTime, server_default=func.now(), server_onupdate=func.now())
+    embedding = Column(Vector(768), nullable=False)  # 768 dimensions for all-mpnet-base-v2
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     document = relationship("Document", back_populates="embedding")

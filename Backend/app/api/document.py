@@ -26,6 +26,7 @@ from app.core.database import get_db
 from app.models.admin import Document
 from app.schemas.document import DocumentRead, DocumentUpdate
 from app.utils.file_extractor import extract_text, UnsupportedFileTypeError, ContentTooShortError, FileExtractionError
+from app.services.embedding_service import create_or_update_embedding, delete_embedding
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -96,6 +97,15 @@ def create_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    
+    # 5. Generate and store embedding for the document content
+    try:
+        create_or_update_embedding(db, doc.id, final_content)
+    except Exception as e:
+        # Log the error but don't fail the document creation
+        # The embedding can be regenerated later if needed
+        print(f"Warning: Failed to generate embedding for document {doc.id}: {str(e)}")
+    
     return doc
 
 
@@ -125,10 +135,14 @@ def update_document(document_id: str, payload: DocumentUpdate, db: Session = Dep
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    content_updated = False
+    
     if payload.title is not None:
         doc.title = payload.title
     if payload.content is not None:
         doc.content = payload.content
+        content_updated = True
     if payload.tags is not None:
         doc.tags = payload.tags
     if payload.metadata is not None:
@@ -139,16 +153,33 @@ def update_document(document_id: str, payload: DocumentUpdate, db: Session = Dep
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    
+    # Regenerate embedding if content was updated
+    if content_updated:
+        try:
+            create_or_update_embedding(db, doc.id, doc.content)
+        except Exception as e:
+            # Log the error but don't fail the document update
+            print(f"Warning: Failed to update embedding for document {doc.id}: {str(e)}")
+    
     return doc
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: str, db: Session = Depends(get_db)):
-    """Soft-delete a document by setting `deleted_at`."""
+    """Soft-delete a document by setting `deleted_at` and remove its embedding."""
     doc = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     doc.deleted_at = datetime.utcnow()
     db.add(doc)
     db.commit()
+    
+    # Delete the associated embedding
+    try:
+        delete_embedding(db, doc.id)
+    except Exception as e:
+        # Log the error but don't fail the document deletion
+        print(f"Warning: Failed to delete embedding for document {doc.id}: {str(e)}")
+    
     return None
