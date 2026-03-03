@@ -19,7 +19,7 @@ The project proposes a digital legal assistant integrated with a structured KYR 
 ## Technology Stack
 - Frontend: HTML, CSS, JavaScript
 - Backend: Python (FastAPI)
-- Database: MongoDB (Beanie ODM)
+- Database: Postgres SQL (PG Vector)
 - Chatbot: Rule-based knowledge-driven system
 
 ## Roles
