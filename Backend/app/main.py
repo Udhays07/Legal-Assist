@@ -18,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from app.api import category, document
 from app.api import embeddings_health
+from app.api import rag
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
@@ -54,10 +55,49 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Backend API System",
-    description="Role-based backend system with resource management and intelligent interactions",
+    title="Legal Assistant Backend API",
+    description="""
+    Complete API for Legal Assistant system with RAG capabilities.
+    
+    ## Features
+    
+    * **RAG System**: Intelligent Q&A using Retrieval-Augmented Generation
+    * **Document Management**: Upload and manage legal documents with automatic embedding generation
+    * **Semantic Search**: Find relevant documents using vector similarity
+    * **Conversation History**: Track and manage user conversations
+    * **Category Organization**: Organize documents by categories
+    
+    ## Tech Stack
+    
+    * FastAPI + PostgreSQL + pgvector
+    * Groq LLM (Llama 3.1-8b-instant)
+    * E5-base-v2 embeddings (768 dimensions)
+    * Sentence Transformers
+    
+    ## Quick Start
+    
+    1. Create a category: `POST /categories/`
+    2. Upload a document: `POST /documents/`
+    3. Ask a question: `POST /rag/query`
+    
+    ## Documentation
+    
+    * **Swagger UI**: `/docs` (this page)
+    * **ReDoc**: `/redoc`
+    * **OpenAPI Spec**: Download from `/openapi.json`
+    """,
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    contact={
+        "name": "API Support",
+        "email": "support@legalassist.com",
+    },
+    license_info={
+        "name": "MIT",
+    }
 )
 
 @app.exception_handler(RequestValidationError)
@@ -81,6 +121,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 app.include_router(category.router)
 app.include_router(document.router)
 app.include_router(embeddings_health.router)
+app.include_router(rag.router)
 
 
 # Minimal CORS for development (adjust in production)

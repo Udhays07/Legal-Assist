@@ -13,6 +13,9 @@ python-jose[cryptography]==3.3.0
 pydantic==2.6.4
 pydantic-settings==2.2.1
 
+# HTTP requests for LLM service
+requests==2.31.0
+
 # File upload & content extraction
 python-multipart==0.0.9
 pdfminer.six==20221105
@@ -28,3 +31,4 @@ torch==2.3.1
 numpy==1.26.4
 transformers==4.41.2
 huggingface-hub==0.23.4
+groq
