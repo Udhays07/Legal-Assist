@@ -1,0 +1,1092 @@
+openapi: 3.0.3
+info:
+  title: Legal Assistant Backend API
+  description: |
+    Complete API documentation for the Legal Assistant backend system.
+    
+    Features:
+    - RAG (Retrieval-Augmented Generation) for intelligent Q&A
+    - Document management with automatic embedding generation
+    - Category organization
+    - Semantic search with pgvector
+    - Conversation history tracking
+    
+    Tech Stack:
+    - FastAPI + PostgreSQL + pgvector
+    - Groq LLM (Llama 3.1)
+    - E5-base-v2 embeddings (768 dimensions)
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@legalassist.com
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: http://localhost:8000/api
+    description: API with prefix (if configured)
+
+tags:
+  - name: RAG
+    description: Retrieval-Augmented Generation endpoints for intelligent Q&A
+  - name: Documents
+    description: Document management operations
+  - name: Categories
+    description: Category management operations
+  - name: Health
+    description: System health check endpoints
+
+paths:
+  # ==================== RAG ENDPOINTS ====================
+  
+  /rag/query:
+    post:
+      tags:
+        - RAG
+      summary: Query the RAG system
+      description: |
+        Submit a question to the RAG system. The system will:
+        1. Convert your query to embeddings
+        2. Search for relevant documents using semantic similarity
+        3. Generate an AI response using retrieved context
+        4. Save the conversation history
+      operationId: ragQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RAGQuery'
+            examples:
+              basic_query:
+                summary: Basic legal question
+                value:
+                  query: "What is the punishment for murder under IPC?"
+                  user_id: "123e4567-e89b-12d3-a456-426614174000"
+                  conversation_id: null
+                  top_k: 5
+                  min_similarity: 0.3
+                  category_id: null
+                  include_sources: true
+              follow_up:
+                summary: Follow-up question in existing conversation
+                value:
+                  query: "What are the exceptions to this law?"
+                  user_id: "123e4567-e89b-12d3-a456-426614174000"
+                  conversation_id: "87625bb4-3985-4e70-bc58-ed74d75c18de"
+                  top_k: 5
+                  min_similarity: 0.3
+                  include_sources: true
+      responses:
+        '200':
+          description: Successful response with AI-generated answer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RAGResponse'
+              example:
+                answer: "Section 302 of the Indian Penal Code deals with 'Punishment for murder.' It states that whoever commits murder shall be punished with death, or imprisonment for life, and shall also be liable to fine."
+                sources:
+                  - id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                    title: "SECTION 302 OF THE INDIAN PENAL CODE, 1860"
+                    content: "Punishment for Murder – A Detailed Expository Analysis..."
+                    similarity: 0.8743
+                    category_id: "cat-uuid-here"
+                conversation_id: "87625bb4-3985-4e70-bc58-ed74d75c18de"
+                message_id: "msg-uuid-here"
+                processing_time_ms: 507
+                model_used: "llama-3.1-8b-instant"
+        '400':
+          description: Bad request - invalid query parameters
+          content:
+            application/json:
+              example:
+                detail: "Query cannot be empty"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              example:
+                detail: "Failed to process query. Please try again."
+
+  /rag/search:
+    post:
+      tags:
+        - RAG
+      summary: Semantic search without AI response
+      description: |
+        Perform semantic search on documents without generating an AI response.
+        Useful for document discovery and exploration.
+      operationId: searchDocuments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchQuery'
+            example:
+              query: "insurance claims settlement"
+              top_k: 5
+              min_similarity: 0.0
+              category_id: null
+              status: "published"
+      responses:
+        '200':
+          description: Search results with similarity scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              example:
+                query: "insurance claims settlement"
+                results:
+                  - id: "doc-uuid-1"
+                    title: "Section 1: Unfair Claims Settlement Practices"
+                    content: "This provision prohibits insurers from engaging in deceptive..."
+                    similarity: 0.8520
+                    category_id: "cat-uuid"
+                    tags: ["insurance", "claims"]
+                    metadata: {}
+                  - id: "doc-uuid-2"
+                    title: "Insurance Claims Guide"
+                    content: "A comprehensive guide to filing insurance claims..."
+                    similarity: 0.7890
+                    category_id: "cat-uuid"
+                    tags: ["insurance", "guide"]
+                    metadata: {}
+                total_results: 2
+                processing_time_ms: 150
+        '400':
+          description: Bad request
+        '500':
+          description: Search failed
+
+  /rag/conversations:
+    get:
+      tags:
+        - RAG
+      summary: List user conversations
+      description: Retrieve all conversations for a specific user, ordered by most recent first
+      operationId: listConversations
+      parameters:
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the user
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Maximum number of conversations to return
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationRead'
+              example:
+                conversations:
+                  - id: "conv-uuid-1"
+                    user_id: "123e4567-e89b-12d3-a456-426614174000"
+                    title: "IPC Section 302 Questions"
+                    created_at: "2024-03-04T10:30:00Z"
+                    updated_at: "2024-03-04T10:35:00Z"
+                    message_count: 5
+                  - id: "conv-uuid-2"
+                    user_id: "123e4567-e89b-12d3-a456-426614174000"
+                    title: "Insurance Claims"
+                    created_at: "2024-03-03T14:20:00Z"
+                    updated_at: "2024-03-03T14:25:00Z"
+                    message_count: 3
+        '500':
+          description: Failed to retrieve conversations
+
+  /rag/conversations/{conversation_id}:
+    get:
+      tags:
+        - RAG
+      summary: Get conversation history
+      description: Retrieve a specific conversation with all its messages
+      operationId: getConversation
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the conversation
+          example: "87625bb4-3985-4e70-bc58-ed74d75c18de"
+        - name: user_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the user (for authorization)
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetail'
+              example:
+                conversation_id: "87625bb4-3985-4e70-bc58-ed74d75c18de"
+                messages:
+                  - id: "msg-uuid-1"
+                    conversation_id: "87625bb4-3985-4e70-bc58-ed74d75c18de"
+                    role: "user"
+                    content: "What is Section 302 of IPC?"
+                    sources: null
+                    rating: null
+                    feedback: null
+                    created_at: "2024-03-04T10:30:00Z"
+                  - id: "msg-uuid-2"
+                    conversation_id: "87625bb4-3985-4e70-bc58-ed74d75c18de"
+                    role: "assistant"
+                    content: "Section 302 deals with punishment for murder..."
+                    sources: [...]
+                    rating: 5
+                    feedback: "Very helpful!"
+                    created_at: "2024-03-04T10:30:05Z"
+        '404':
+          description: Conversation not found
+        '500':
+          description: Failed to retrieve conversation
+
+  /rag/feedback:
+    post:
+      tags:
+        - RAG
+      summary: Submit message feedback
+      description: Rate and provide feedback for an AI-generated response
+      operationId: submitFeedback
+      parameters:
+        - name: message_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the message to rate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageFeedback'
+            example:
+              rating: 5
+              feedback: "Very accurate and helpful answer!"
+      responses:
+        '200':
+          description: Feedback submitted successfully
+          content:
+            application/json:
+              example:
+                message: "Feedback submitted successfully"
+                message_id: "msg-uuid-here"
+        '404':
+          description: Message not found
+        '500':
+          description: Failed to submit feedback
+
+  /rag/health:
+    get:
+      tags:
+        - RAG
+      summary: RAG system health check
+      description: |
+        Check the health status of all RAG system components:
+        - Database connection
+        - LLM service availability
+        - Embedding model status
+      operationId: ragHealthCheck
+      responses:
+        '200':
+          description: System health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              examples:
+                healthy:
+                  summary: All systems operational
+                  value:
+                    status: "healthy"
+                    database: "connected"
+                    llm:
+                      available: true
+                      model: "llama-3.1-8b-instant"
+                      provider: "groq"
+                    embedding:
+                      model: "intfloat/e5-base-v2"
+                      dimension: 768
+                degraded:
+                  summary: LLM service unavailable
+                  value:
+                    status: "degraded"
+                    database: "connected"
+                    llm:
+                      available: false
+                      error: "Groq API not accessible"
+                    embedding:
+                      model: "intfloat/e5-base-v2"
+                      dimension: 768
+
+  # ==================== DOCUMENT ENDPOINTS ====================
+  
+  /documents/:
+    post:
+      tags:
+        - Documents
+      summary: Create a new document
+      description: |
+        Upload a new document with either text content or file upload.
+        Automatically generates embeddings for semantic search.
+        
+        Supported file types: PDF, DOCX, TXT
+      operationId: createDocument
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - category_id
+                - title
+              properties:
+                category_id:
+                  type: string
+                  format: uuid
+                  description: UUID of the category
+                title:
+                  type: string
+                  description: Document title
+                  minLength: 1
+                content:
+                  type: string
+                  description: Text content (if not uploading file)
+                file:
+                  type: string
+                  format: binary
+                  description: File upload (PDF, DOCX, TXT)
+                tags:
+                  type: string
+                  description: JSON array string like '["legal", "ipc"]'
+                  example: '["ipc", "criminal law"]'
+                status:
+                  type: string
+                  enum: [published, draft]
+                  default: published
+                  description: Document status
+                created_by:
+                  type: string
+                  format: uuid
+                  description: UUID of the creator
+            encoding:
+              file:
+                contentType: application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, text/plain
+      responses:
+        '201':
+          description: Document created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRead'
+        '422':
+          description: Validation error or unsupported file type
+          content:
+            application/json:
+              examples:
+                no_content:
+                  summary: No content provided
+                  value:
+                    detail: "No content found. Please provide text content or upload a file."
+                unsupported_file:
+                  summary: Unsupported file type
+                  value:
+                    detail: "Unsupported file type. Supported: PDF, DOCX, TXT"
+        '500':
+          description: Server error
+
+    get:
+      tags:
+        - Documents
+      summary: List all documents
+      description: Retrieve all documents with optional filtering by category and status
+      operationId: listDocuments
+      parameters:
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Filter by category UUID
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [published, draft]
+          description: Filter by document status
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentRead'
+
+  /documents/{document_id}:
+    get:
+      tags:
+        - Documents
+      summary: Get a single document
+      description: Retrieve a specific document by its UUID
+      operationId: getDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the document
+      responses:
+        '200':
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRead'
+        '404':
+          description: Document not found
+
+    put:
+      tags:
+        - Documents
+      summary: Update a document
+      description: |
+        Partially update a document. Only include fields you want to change.
+        If content is updated, embeddings are automatically regenerated.
+      operationId: updateDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpdate'
+            example:
+              title: "Updated Document Title"
+              content: "Updated content with new information..."
+              tags: ["updated", "tags"]
+              status: "published"
+      responses:
+        '200':
+          description: Document updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentRead'
+        '404':
+          description: Document not found
+
+    delete:
+      tags:
+        - Documents
+      summary: Delete a document
+      description: |
+        Soft-delete a document (sets deleted_at timestamp).
+        Also removes associated embeddings.
+      operationId: deleteDocument
+      parameters:
+        - name: document_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Document deleted successfully
+        '404':
+          description: Document not found
+
+  # ==================== CATEGORY ENDPOINTS ====================
+  
+  /categories/:
+    post:
+      tags:
+        - Categories
+      summary: Create a new category
+      description: Create a category for organizing documents
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreate'
+            example:
+              title: "Indian Penal Code"
+              description: "Sections and provisions from IPC"
+              is_active: true
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryRead'
+        '400':
+          description: Category with this title already exists
+
+    get:
+      tags:
+        - Categories
+      summary: List all categories
+      description: Retrieve all categories, optionally including inactive ones
+      operationId: listCategories
+      parameters:
+        - name: include_inactive
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Include inactive categories in results
+      responses:
+        '200':
+          description: List of categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CategoryRead'
+
+  /categories/{category_id}:
+    get:
+      tags:
+        - Categories
+      summary: Get a single category
+      operationId: getCategory
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Category details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryRead'
+        '404':
+          description: Category not found
+
+    put:
+      tags:
+        - Categories
+      summary: Update a category
+      operationId: updateCategory
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryUpdate'
+            example:
+              title: "Updated Category Name"
+              description: "Updated description"
+              is_active: true
+      responses:
+        '200':
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryRead'
+        '400':
+          description: Category title already in use
+        '404':
+          description: Category not found
+
+    delete:
+      tags:
+        - Categories
+      summary: Delete a category
+      description: |
+        Soft-delete a category and all its associated documents.
+        This is a cascading delete operation.
+      operationId: deleteCategory
+      parameters:
+        - name: category_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Category deleted successfully
+        '404':
+          description: Category not found
+
+  # ==================== HEALTH CHECK ====================
+  
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Application health check
+      description: Basic health check endpoint for monitoring and load balancers
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Application is healthy
+          content:
+            application/json:
+              example:
+                status: "healthy"
+
+# ==================== COMPONENTS ====================
+
+components:
+  schemas:
+    # RAG Schemas
+    RAGQuery:
+      type: object
+      required:
+        - query
+        - user_id
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: User's question or query
+          example: "What is the punishment for murder under IPC?"
+        user_id:
+          type: string
+          format: uuid
+          description: UUID of the user making the query
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        conversation_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional conversation ID for follow-up questions
+          example: null
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+          description: Number of documents to retrieve
+        min_similarity:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.3
+          description: Minimum similarity threshold
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional category filter
+        include_sources:
+          type: boolean
+          default: true
+          description: Include source documents in response
+
+    RAGResponse:
+      type: object
+      required:
+        - answer
+        - conversation_id
+        - message_id
+        - processing_time_ms
+        - model_used
+      properties:
+        answer:
+          type: string
+          description: AI-generated answer
+        sources:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/SourceDocument'
+        conversation_id:
+          type: string
+          format: uuid
+        message_id:
+          type: string
+          format: uuid
+        processing_time_ms:
+          type: integer
+          description: Processing time in milliseconds
+        model_used:
+          type: string
+          description: LLM model name used for generation
+
+    SourceDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        similarity:
+          type: number
+          format: float
+          description: Similarity score (0.0 to 1.0)
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    SearchQuery:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          description: Search query
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+        min_similarity:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.0
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [published, draft]
+          default: "published"
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResultItem'
+        total_results:
+          type: integer
+        processing_time_ms:
+          type: integer
+
+    SearchResultItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        similarity:
+          type: number
+          format: float
+        category_id:
+          type: string
+          format: uuid
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+
+    MessageFeedback:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Rating from 1 to 5
+        feedback:
+          type: string
+          nullable: true
+          description: Optional text feedback
+
+    ConversationRead:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        message_count:
+          type: integer
+          default: 0
+
+    ConversationDetail:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageRead'
+
+    MessageRead:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversation_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        sources:
+          type: array
+          nullable: true
+          items:
+            type: object
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          nullable: true
+        feedback:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        database:
+          type: string
+        llm:
+          type: object
+          properties:
+            available:
+              type: boolean
+            model:
+              type: string
+            provider:
+              type: string
+            error:
+              type: string
+              nullable: true
+        embedding:
+          type: object
+          properties:
+            model:
+              type: string
+            dimension:
+              type: integer
+
+    # Document Schemas
+    DocumentRead:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        status:
+          type: string
+          enum: [published, draft]
+        created_by:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DocumentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+        content:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+        status:
+          type: string
+          enum: [published, draft]
+          nullable: true
+
+    # Category Schemas
+    CategoryCreate:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+          default: true
+
+    CategoryRead:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    CategoryUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        is_active:
+          type: boolean
+          nullable: true
+
+  # Security Schemes (for future authentication)
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authenticated requests (not yet implemented)
+
+# Global security (commented out until auth is implemented)
+# security:
+#   - bearerAuth: []
