@@ -2,12 +2,13 @@
 Embedding service for document vectorization using sentence-transformers.
 
 This service handles the generation and management of document embeddings
-for semantic search capabilities. It uses the all-mpnet-base-v2 model
-which produces 768-dimensional vectors.
+for semantic search capabilities. It uses the intfloat/e5-base-v2 model
+which produces 768-dimensional vectors with superior retrieval quality.
 
 Key Features:
 - Lazy loading of the embedding model (loaded once on first use)
 - Automatic embedding generation for document content
+- Automatic prefix handling for e5 model (passage: for documents, query: for searches)
 - Batch processing support for multiple documents
 - Integration with DocumentEmbedding table via SQLAlchemy
 
@@ -15,6 +16,10 @@ System Dependencies:
 - Depends on: sentence-transformers for embedding generation
 - Depends on: models.admin for DocumentEmbedding ORM
 - Depended by: api.document for automatic embedding on create/update
+
+Note: e5-base-v2 requires prefixes for optimal performance:
+- Documents: "passage: " prefix (automatically added)
+- Search queries: "query: " prefix (must be added by search function)
 """
 
 import logging
@@ -24,7 +29,7 @@ from sqlalchemy.orm import Session
 from sentence_transformers import SentenceTransformer
 
 from app.models.admin import DocumentEmbedding
-from app.core.constants import MODEL_NAME, EMBEDDING_DIMENSION
+from app.core.constants import MODEL_NAME, EMBEDDING_DIMENSION, MODEL_INFO
 
 logger = logging.getLogger(__name__)
 
@@ -49,17 +54,23 @@ def get_embedding_model() -> SentenceTransformer:
     return _embedding_model
 
 
-def generate_embedding(text: str) -> List[float]:
+def generate_embedding(text: str, is_query: bool = False) -> List[float]:
     """
     Generate embedding vector for a given text.
     
+    For e5-base-v2 model, automatically adds appropriate prefix:
+    - Documents: "passage: " prefix
+    - Search queries: "query: " prefix
+    
     Args:
         text: The text content to embed
+        is_query: If True, adds "query: " prefix; if False, adds "passage: " prefix
         
     Returns:
         List[float]: 768-dimensional embedding vector
         
     Raises:
+        ValueError: If text is empty
         Exception: If embedding generation fails
     """
     if not text or not text.strip():
@@ -67,8 +78,17 @@ def generate_embedding(text: str) -> List[float]:
     
     model = get_embedding_model()
     
+    # Add appropriate prefix for e5 model
+    if MODEL_INFO.get("requires_prefix", False):
+        if is_query:
+            prefixed_text = MODEL_INFO["query_prefix"] + text
+        else:
+            prefixed_text = MODEL_INFO["passage_prefix"] + text
+    else:
+        prefixed_text = text
+    
     # Generate embedding (returns numpy array)
-    embedding = model.encode(text, convert_to_numpy=True)
+    embedding = model.encode(prefixed_text, convert_to_numpy=True)
     
     # Convert to Python list for database storage
     return embedding.tolist()
@@ -98,9 +118,9 @@ def create_or_update_embedding(
         Exception: If embedding generation or database operation fails
     """
     try:
-        # Generate embedding
+        # Generate embedding (with passage prefix for documents)
         logger.info(f"Generating embedding for document {document_id}")
-        embedding_vector = generate_embedding(content)
+        embedding_vector = generate_embedding(content, is_query=False)
         
         # Check if embedding already exists
         existing_embedding = db.query(DocumentEmbedding).filter(

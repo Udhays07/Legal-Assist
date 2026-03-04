@@ -37,9 +37,12 @@ def test_model_loading():
     print("TEST 1: Model Loading")
     print("="*60)
     try:
+        from app.core.constants import MODEL_NAME
         model = get_embedding_model()
-        print(f"✓ Model loaded successfully: {model}")
-        print(f"✓ Model name: {model.get_sentence_embedding_dimension()} dimensions")
+        dimension = model.get_sentence_embedding_dimension()
+        print(f"✓ Model loaded successfully")
+        print(f"✓ Model name: {MODEL_NAME}")
+        print(f"✓ Embedding dimension: {dimension}")
         return True
     except Exception as e:
         print(f"✗ Failed to load model: {str(e)}")

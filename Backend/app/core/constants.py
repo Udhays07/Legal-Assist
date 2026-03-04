@@ -6,14 +6,17 @@ to ensure consistency and easy maintenance.
 """
 
 # Embedding Model Configuration
-MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+MODEL_NAME = "intfloat/e5-base-v2"
 EMBEDDING_DIMENSION = 768
 
 # Model Information
 MODEL_INFO = {
     "name": MODEL_NAME,
     "dimension": EMBEDDING_DIMENSION,
-    "description": "All-mpnet-base-v2 model for semantic embeddings",
-    "license": "Apache 2.0",
-    "size_mb": 420,
+    "description": "E5-base-v2 model for high-quality semantic embeddings",
+    "license": "MIT",
+    "size_mb": 411,
+    "requires_prefix": True,
+    "query_prefix": "query: ",
+    "passage_prefix": "passage: ",
 }
