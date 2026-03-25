@@ -1,8 +1,8 @@
-"""initial schema
+"""create items table
 
-Revision ID: c1b95eda90d4
+Revision ID: d2803383d13c
 Revises: 
-Create Date: 2026-02-21 18:36:25.577404
+Create Date: 2026-03-25 21:51:08.775810
 
 """
 from typing import Sequence, Union
@@ -10,9 +10,10 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+import pgvector
 
 # revision identifiers, used by Alembic.
-revision: str = 'c1b95eda90d4'
+revision: str = 'd2803383d13c'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -56,6 +57,7 @@ def upgrade() -> None:
     sa.Column('title', sa.String(), nullable=False),
     sa.Column('content', sa.Text(), nullable=False),
     sa.Column('tags', sa.ARRAY(sa.String()), nullable=True),
+    sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('status', sa.String(), server_default='published', nullable=False),
     sa.Column('created_by', sa.UUID(), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -69,7 +71,7 @@ def upgrade() -> None:
     op.create_index('ix_documents_tags', 'documents', ['tags'], unique=False, postgresql_using='gin')
     op.create_table('document_embeddings',
     sa.Column('document_id', sa.UUID(), nullable=False),
-    sa.Column('embedding', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+    sa.Column('embedding', pgvector.sqlalchemy.vector.VECTOR(dim=768), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=True),
     sa.ForeignKeyConstraint(['document_id'], ['documents.id'], name=op.f('fk_document_embeddings_document_id_documents')),
     sa.PrimaryKeyConstraint('document_id', name=op.f('pk_document_embeddings'))

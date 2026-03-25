@@ -143,7 +143,30 @@ def semantic_search(
         
         # Execute search
         logger.info(f"Executing similarity search (top_k={top_k}, min_similarity={min_similarity})")
-        results = db.execute(sql_query, params).fetchall()
+        
+        try:
+            results = db.execute(sql_query, params).fetchall()
+        except Exception as pg_err:
+            logger.warning("pgvector error, falling back to basic text search.")
+            db.rollback()
+            
+            # Simple fallback SQL without embeddings
+            sql_fallback = """
+                SELECT 
+                    id, category_id, title, content, tags, metadata, status, created_at, updated_at,
+                    1.0 as similarity
+                FROM documents d
+                WHERE deleted_at IS NULL
+                AND (title ILIKE :search_term OR content ILIKE :search_term)
+            """
+            params["search_term"] = f"%{query}%"
+            if category_id:
+                sql_fallback += " AND category_id = :category_id"
+            if status:
+                sql_fallback += " AND status = :status"
+            sql_fallback += f" LIMIT :top_k"
+            
+            results = db.execute(text(sql_fallback), params).fetchall()
         
         # Convert to SearchResult objects
         search_results = []

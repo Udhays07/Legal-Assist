@@ -70,6 +70,60 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Material Design Custom Colors */
+  --color-secondary-fixed: #bdece4;
+  --color-primary-container: #1a2b3c;
+  --color-surface-container-highest: #e0e3e5;
+  --color-on-error: #ffffff;
+  --color-tertiary: #1f1300;
+  --color-on-tertiary: #ffffff;
+  --color-surface-container-low: #f2f4f6;
+  --color-primary-fixed: #d2e4fb;
+  --color-surface-container: #eceef0;
+  --color-on-tertiary-container: #af8c47;
+  --color-outline: #74777d;
+  --color-on-primary: #ffffff;
+  --color-background: #f8f9fb;
+  --color-tertiary-fixed-dim: #e9c176;
+  --color-outline-variant: #c4c6cd;
+  --color-error-container: #ffdad6;
+  --color-error: #ba1a1a;
+  --color-on-surface-variant: #44474c;
+  --color-surface-tint: #4f6073;
+  --color-inverse-primary: #b7c8de;
+  --color-surface-dim: #d8dadc;
+  --color-primary: #041627;
+  --color-on-tertiary-fixed-variant: #5d4201;
+  --color-on-error-container: #93000a;
+  --color-tertiary-container: #392700;
+  --color-on-secondary: #ffffff;
+  --color-surface-bright: #f8f9fb;
+  --color-on-surface: #191c1e;
+  --color-secondary-fixed-dim: #a1cfc9;
+  --color-on-secondary-fixed-variant: #214e49;
+  --color-on-primary-fixed: #0b1d2d;
+  --color-on-secondary-fixed: #00201d;
+  --color-surface-variant: #e0e3e5;
+  --color-inverse-on-surface: #eff1f3;
+  --color-on-background: #191c1e;
+  --color-tertiary-fixed: #ffdea5;
+  --color-inverse-surface: #2d3133;
+  --color-on-tertiary-fixed: #261900;
+  --color-surface: #f8f9fb;
+  --color-primary-fixed-dim: #b7c8de;
+  --color-surface-container-high: #e6e8ea;
+  --color-on-primary-fixed-variant: #38485a;
+  --color-on-secondary-container: #406c66;
+  --color-on-primary-container: #8192a7;
+  --color-secondary-container: #bdece4;
+  --color-surface-container-lowest: #ffffff;
+
+  /* Custom Fonts */
+  --font-headline: var(--font-newsreader);
+  --font-body: var(--font-manrope);
+  --font-label: var(--font-manrope);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -82,8 +136,8 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-sans), system-ui, sans-serif;
+    @apply bg-background text-on-background;
+    font-family: var(--font-body), system-ui, sans-serif;
     overflow-x: hidden;
   }
 }
@@ -109,4 +163,19 @@
     radial-gradient(at 0% 0%, hsla(253, 16%, 7%, 1) 0, transparent 50%),
     radial-gradient(at 50% 0%, hsla(225, 39%, 30%, 0.2) 0, transparent 50%),
     radial-gradient(at 100% 0%, hsla(339, 49%, 30%, 0.1) 0, transparent 50%);
+}
+
+/* Material Design custom utilities */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+.serif-italic {
+  font-family: var(--font-newsreader);
+  font-style: italic;
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #041627 0%, #1a2b3c 100%);
 }

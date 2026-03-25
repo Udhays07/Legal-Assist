@@ -120,30 +120,36 @@ class LLMService:
             
             # Make request
             logger.info(f"Generating response with {self.model}")
-            response = requests.post(
-                f"{self.base_url}/api/generate",
-                json=payload,
-                timeout=60
-            )
             
-            if response.status_code != 200:
-                raise Exception(f"Ollama API error: {response.status_code} - {response.text}")
-            
-            # Parse response
-            if stream:
-                # Handle streaming response
-                full_response = ""
-                for line in response.iter_lines():
-                    if line:
-                        data = json.loads(line)
-                        full_response += data.get("response", "")
-                        if data.get("done", False):
-                            break
-                result = full_response
-            else:
-                # Handle non-streaming response
-                data = response.json()
-                result = data.get("response", "")
+            try:
+                response = requests.post(
+                    f"{self.base_url}/api/generate",
+                    json=payload,
+                    timeout=60
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Ollama API error: {response.status_code} - {response.text}")
+                
+                # Parse response
+                if stream:
+                    # Handle streaming response
+                    full_response = ""
+                    for line in response.iter_lines():
+                        if line:
+                            data = json.loads(line)
+                            full_response += data.get("response", "")
+                            if data.get("done", False):
+                                break
+                    result = full_response
+                else:
+                    # Handle non-streaming response
+                    data = response.json()
+                    result = data.get("response", "")
+            except Exception as e:
+                logger.warning(f"Ollama failed, resorting to mock response. Error: {e}")
+                result = "This is a mock response because the LLM is currently not accessible. Please check if Ollama or Groq is configured correctly to get real responses."
+
             
             elapsed_time = (time.time() - start_time) * 1000
             logger.info(f"Response generated in {elapsed_time:.0f}ms")

@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Inter, Outfit } from "next/font/google";
+import { Newsreader, Manrope } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-sans",
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
   subsets: ["latin"],
 });
 
-const outfit = Outfit({
-  variable: "--font-display",
+const manrope = Manrope({
+  variable: "--font-manrope",
   subsets: ["latin"],
 });
 
@@ -24,8 +24,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+      </head>
       <body
-        className={`${inter.variable} ${outfit.variable} antialiased bg-mesh min-h-screen text-foreground selection:bg-primary/30`}
+        className={`${newsreader.variable} ${manrope.variable} antialiased bg-background text-on-background font-body min-h-screen selection:bg-primary/30`}
       >
         {children}
       </body>
