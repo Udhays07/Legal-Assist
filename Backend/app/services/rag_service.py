@@ -27,6 +27,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.services.search_service import semantic_search, SearchResult
+from app.services.web_search_service import perform_web_search
 from app.services.llm_service_groq import get_llm_service
 from app.models.chat import Conversation, Message
 from app.models.admin import User
@@ -34,6 +35,7 @@ from app.core.constants import (
     RAG_SYSTEM_PROMPT,
     RAG_USER_PROMPT_TEMPLATE,
     RAG_NO_RESULTS_MESSAGE,
+    INTENT_CLASSIFICATION_PROMPT,
     RAG_CONTEXT_PREVIEW_LENGTH,
     RAG_SOURCE_CONTENT_LENGTH,
     DEFAULT_LLM_TEMPERATURE,
@@ -82,8 +84,25 @@ class RAGService:
         start_time = time.time()
         
         try:
-            # Step 1: Retrieve relevant documents
-            logger.info(f"Processing RAG query: '{user_query[:50]}...'")
+            # Step 1: Classify user intent
+            logger.info(f"Classifying intent for query: '{user_query[:50]}...'")
+            intent = self._classify_intent(user_query, user_id, conversation_id)
+            logger.info(f"Detected intent: {intent}")
+            
+            if intent == "GREETING":
+                return self._handle_greeting(user_query, user_id, conversation_id, start_time)
+            
+            if intent == "CHAT":
+                return self._handle_chat(user_query, user_id, conversation_id, start_time)
+                
+            if intent == "UNWANTED":
+                return self._handle_unwanted(user_query, user_id, conversation_id, start_time)
+            
+            if intent == "OFF_TOPIC":
+                return self._handle_off_topic(user_query, user_id, conversation_id, start_time)
+            
+            # Step 2: Process LEGAL_QUERY (enhanced RAG)
+            # 2a: Retrieve from local database
             search_results = semantic_search(
                 db=self.db,
                 query=user_query,
@@ -92,22 +111,25 @@ class RAGService:
                 category_id=category_id
             )
             
-            if not search_results:
-                logger.warning("No relevant documents found")
+            # 2b: Perform web search for cross-verification
+            web_results = perform_web_search(user_query, max_results=3)
+            
+            if not search_results and not web_results:
+                logger.warning("No relevant results found in DB or Web")
                 return self._handle_no_results(user_query, user_id, conversation_id)
             
-            logger.info(f"Retrieved {len(search_results)} relevant documents")
+            # Step 3: Format contexts
+            db_context = self._format_context(search_results) if search_results else "No relevant documents in the local database."
+            web_context = self._format_web_context(web_results) if web_results else "No relevant information found on the web."
             
-            # Step 2: Format context from retrieved documents
-            context = self._format_context(search_results)
-            
-            # Step 3: Generate response using LLM
+            # Step 4: Generate response using LLM
             user_prompt = RAG_USER_PROMPT_TEMPLATE.format(
-                context=context,
+                db_context=db_context,
+                web_context=web_context,
                 question=user_query
             )
             
-            logger.info("Generating LLM response")
+            logger.info("Generating LLM response for legal query")
             response = self.llm.generate(
                 prompt=user_prompt,
                 system_prompt=RAG_SYSTEM_PROMPT,
@@ -115,7 +137,7 @@ class RAGService:
                 max_tokens=DEFAULT_LLM_MAX_TOKENS
             )
             
-            # Step 4: Save conversation and messages
+            # Step 5: Save conversation and messages
             conv_id, msg_id = self._save_conversation(
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -125,14 +147,16 @@ class RAGService:
                 processing_time_ms=int((time.time() - start_time) * 1000)
             )
             
-            # Step 5: Format response
+            # Step 6: Format response
             result = {
                 "answer": response,
                 "sources": [self._format_source(r) for r in search_results],
+                "web_sources": web_results,
                 "conversation_id": str(conv_id),
                 "message_id": str(msg_id),
                 "processing_time_ms": int((time.time() - start_time) * 1000),
                 "model_used": self.llm.model,
+                "intent": intent
             }
             
             logger.info(f"RAG query completed in {result['processing_time_ms']}ms")
@@ -142,6 +166,177 @@ class RAGService:
             logger.error(f"RAG query failed: {str(e)}")
             raise
     
+    def _classify_intent(self, query: str, user_id: UUID, conversation_id: Optional[UUID] = None) -> str:
+        """Classify the intent of the user query with history awareness."""
+        history_text = "No previous history."
+        if conversation_id:
+            try:
+                history = self.get_conversation_history(conversation_id, user_id)
+                # Format last 3 messages for context
+                history_parts = []
+                for msg in history[-3:]:
+                    history_parts.append(f"{msg['role'].upper()}: {msg['content'][:200]}")
+                if history_parts:
+                    history_text = "\n".join(history_parts)
+            except Exception:
+                pass
+
+        prompt = INTENT_CLASSIFICATION_PROMPT.format(history=history_text, query=query)
+        response = self.llm.generate(
+            prompt=prompt,
+            temperature=0.0,
+            max_tokens=10
+        ).strip().upper()
+        
+        if "GREETING" in response:
+            return "GREETING"
+        if "CHAT" in response:
+            return "CHAT"
+        if "UNWANTED" in response:
+            return "UNWANTED"
+        if "OFF_TOPIC" in response:
+            return "OFF_TOPIC"
+        return "LEGAL_QUERY"
+
+    def _handle_greeting(
+        self,
+        user_query: str,
+        user_id: UUID,
+        conversation_id: Optional[UUID],
+        start_time: float
+    ) -> Dict[str, Any]:
+        """Handle greeting intent."""
+        logger.info("Handling greeting")
+        response = self.llm.generate(
+            prompt=user_query,
+            system_prompt=RAG_SYSTEM_PROMPT,
+            temperature=DEFAULT_LLM_TEMPERATURE
+        )
+        
+        conv_id, msg_id = self._save_conversation(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_query=user_query,
+            assistant_response=response,
+            search_results=[],
+            processing_time_ms=int((time.time() - start_time) * 1000)
+        )
+        
+        return {
+            "answer": response,
+            "sources": [],
+            "conversation_id": str(conv_id),
+            "message_id": str(msg_id),
+            "processing_time_ms": int((time.time() - start_time) * 1000),
+            "model_used": self.llm.model,
+            "intent": "GREETING"
+        }
+
+    def _handle_chat(
+        self,
+        user_query: str,
+        user_id: UUID,
+        conversation_id: Optional[UUID],
+        start_time: float
+    ) -> Dict[str, Any]:
+        """Handle chat/interactive intent (small talk, acknowledgments)."""
+        logger.info("Handling chat")
+        response = self.llm.generate(
+            prompt=user_query,
+            system_prompt="You are a professional legal assistant AI. You can engage in polite small talk, acknowledge feedback, and maintain an interactive dialogue. Keep it brief and professional.",
+            temperature=DEFAULT_LLM_TEMPERATURE
+        )
+        
+        conv_id, msg_id = self._save_conversation(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_query=user_query,
+            assistant_response=response,
+            search_results=[],
+            processing_time_ms=int((time.time() - start_time) * 1000)
+        )
+        
+        return {
+            "answer": response,
+            "sources": [],
+            "conversation_id": str(conv_id),
+            "message_id": str(msg_id),
+            "processing_time_ms": int((time.time() - start_time) * 1000),
+            "model_used": self.llm.model,
+            "intent": "CHAT"
+        }
+
+    def _handle_unwanted(
+        self,
+        user_query: str,
+        user_id: UUID,
+        conversation_id: Optional[UUID],
+        start_time: float
+    ) -> Dict[str, Any]:
+        """Handle unwanted (illegal/harmful) intent."""
+        logger.info("Handling unwanted query")
+        response = "I am a professional legal assistant specialized in legal awareness. I cannot assist with requests related to illegal activities or escaping legal consequences. My purpose is to provide general legal knowledge and promote law awareness."
+        
+        conv_id, msg_id = self._save_conversation(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_query=user_query,
+            assistant_response=response,
+            search_results=[],
+            processing_time_ms=int((time.time() - start_time) * 1000)
+        )
+        
+        return {
+            "answer": response,
+            "sources": [],
+            "conversation_id": str(conv_id),
+            "message_id": str(msg_id),
+            "processing_time_ms": int((time.time() - start_time) * 1000),
+            "model_used": self.llm.model,
+            "intent": "UNWANTED"
+        }
+
+    def _handle_off_topic(
+        self,
+        user_query: str,
+        user_id: UUID,
+        conversation_id: Optional[UUID],
+        start_time: float
+    ) -> Dict[str, Any]:
+        """Handle off-topic intent."""
+        logger.info("Handling off-topic query")
+        response = "I am a professional legal assistant specialized in legal awareness. I can help you understand laws, acts, and legal procedures. I am unable to answer questions unrelated to these topics."
+        
+        conv_id, msg_id = self._save_conversation(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_query=user_query,
+            assistant_response=response,
+            search_results=[],
+            processing_time_ms=int((time.time() - start_time) * 1000)
+        )
+        
+        return {
+            "answer": response,
+            "sources": [],
+            "conversation_id": str(conv_id),
+            "message_id": str(msg_id),
+            "processing_time_ms": int((time.time() - start_time) * 1000),
+            "model_used": self.llm.model,
+            "intent": "OFF_TOPIC"
+        }
+
+    def _format_web_context(self, web_results: List[Dict[str, Any]]) -> str:
+        """Format web search results into context string."""
+        context_parts = []
+        for idx, result in enumerate(web_results, 1):
+            context_parts.append(
+                f"Web Source {idx}: {result['title']}\n"
+                f"Content: {result['content']}\n"
+                f"Link: {result['link']}\n"
+            )
+        return "\n---\n".join(context_parts)
+
     def _format_context(self, search_results: List[SearchResult]) -> str:
         """
         Format retrieved documents into context string.

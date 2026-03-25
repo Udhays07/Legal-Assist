@@ -51,46 +51,56 @@ RAG_CONTEXT_PREVIEW_LENGTH = 500  # Characters per document in context
 RAG_SOURCE_CONTENT_LENGTH = 300   # Characters per source in response
 
 # System prompt for RAG
-RAG_SYSTEM_PROMPT = """You are a professional legal assistant AI helping users understand legal documents and contracts.
-
-Your role:
-- Answer questions based ONLY on the provided context from legal documents
-- Be precise, accurate, and professional
-- Use appropriate legal terminology
-- Cite specific documents when referencing information
-- If the answer is not in the provided context, clearly state "I don't have enough information in the available documents to answer this question."
+RAG_SYSTEM_PROMPT = """You are a professional legal assistant AI. Your goal is to provide accurate legal information and situational awareness for educational and awareness purposes only.
 
 Guidelines:
-- Do not make up information
-- Do not provide legal advice (you are an assistant, not a lawyer)
-- Be clear and concise
-- Use bullet points for clarity when appropriate
-- Always maintain professional tone"""
+1.  **Greetings**: If the user says "hi", "hello", or similar greetings, respond in a friendly, professional, and welcoming manner.
+2.  **Legal Awareness**: Provide information about laws, acts, and legal procedures clearly and concisely.
+3.  **No Advice**: Never provide specific legal advice, suggestions, or recommendations for a particular situation. Always maintain that you are for awareness only.
+4.  **Guardrails**: If the user asks about unrelated topics (e.g., sports, cooking, personal questions), politely inform them that you are specialized in legal awareness and cannot answer those questions.
+5.  **Professional Tone**: Maintain a helpful, objective, and professional tone at all times."""
 
-# User prompt template for RAG
-RAG_USER_PROMPT_TEMPLATE = """Context from relevant legal documents:
+# Intent Classification Prompt
+INTENT_CLASSIFICATION_PROMPT = """Analyze the user's message and the conversation history to classify the intent into one of the following categories:
 
-{context}
+- GREETING: The user is saying hi, hello, or other introductory remarks.
+- LEGAL_QUERY: The user is asking about laws, acts, legal procedures, or a legal concept.
+- CHAT: The user is providing an acknowledgment ("cool", "okay", "thanks", "I see"), making small talk, or continuing a conversation in a natural way.
+- OFF_TOPIC: The user is asking about unrelated general topics (e.g., "who is Dhoni?", "how to bake a cake").
+- UNWANTED: The user is asking for assistance with illegal activities, how to commit a crime, or how to escape the consequences of a crime (e.g., "how to escape from crime", "how to commit fraud").
+
+Respond with only the category name (GREETING, LEGAL_QUERY, CHAT, OFF_TOPIC, or UNWANTED).
+
+CONVERSATION HISTORY:
+{history}
+
+USER MESSAGE:
+{query}"""
+
+# User prompt template for RAG (Enhanced with awareness)
+RAG_USER_PROMPT_TEMPLATE = """You are provided with information from both a legal database and web search. Use this context to provide a clear explanation for the user's question.
 
 ---
+LOCAL DATABASE CONTEXT:
+{db_context}
 
-User Question: {question}
+---
+WEB SEARCH CONTEXT:
+{web_context}
 
-Please provide a clear and accurate answer based on the context above. If you reference specific information, mention which document it comes from."""
+---
+USER QUESTION: {question}
+
+Instructions:
+- Synthesize the information from both sources.
+- Highlight any important acts or sections mentioned.
+- Clearly state that this information is for **legal awareness only** and is NOT legal advice.
+- Be objective and professional."""
 
 # No results message
-RAG_NO_RESULTS_MESSAGE = """I apologize, but I couldn't find any relevant documents in the database to answer your question. This could mean:
+RAG_NO_RESULTS_MESSAGE = """I apologize, but I couldn't find any specific information in our database or via web search to answer your question accurately. 
 
-1. The information you're looking for hasn't been added to the system yet
-2. Your question might need to be rephrased
-3. The topic might not be covered in the available documents
-
-Please try:
-- Rephrasing your question
-- Using different keywords
-- Asking a more general question
-
-Or contact an administrator to add relevant documents to the system."""
+This could be because the topic is very specific or not covered in available legal resources. Please try rephrasing your question or asking a more general legal question."""
 
 # ============================================================
 # API Response Configuration

@@ -15,6 +15,7 @@ import { FileText, Tag, Users, BrainCircuit } from "lucide-react";
 import { useCategories } from "@/features/admin/hooks/useCategories";
 import { useDocuments } from "@/features/admin/hooks/useDocuments";
 import type { DocumentStatus } from "@/features/admin/types/admin.types";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
     published: "default",
@@ -24,7 +25,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
 
 function StatCardSkeleton() {
     return (
-        <Card className="bg-[var(--card)] border-[var(--glass-border)]">
+        <Card className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                 <Skeleton className="h-3 w-24" />
                 <Skeleton className="h-4 w-4 rounded" />
@@ -58,7 +59,10 @@ export default function AdminDashboard() {
         categories.find((c) => c.id === id)?.title ?? id;
 
     return (
-        <div className="flex flex-col gap-7 w-full">
+        <div className="flex flex-col gap-7 w-full relative">
+            <div className="absolute top-0 right-0 z-50">
+                <ThemeToggle />
+            </div>
             <div>
                 <h1 className="text-[1.75rem] font-bold font-[family-name:var(--font-display)] text-[var(--foreground)]">
                     Digital Know Your Rights Framework
@@ -75,7 +79,7 @@ export default function AdminDashboard() {
                     : stats.map(({ label, value, change, icon: Icon }) => (
                         <Card
                             key={label}
-                            className="bg-[var(--card)] border-[var(--glass-border)] hover:border-white/20 transition-colors"
+                            className="bg-card border-border hover:border-white/20 transition-colors"
                         >
                             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                                 <CardTitle className="text-xs font-semibold uppercase tracking-widest text-[var(--muted-foreground)]">
@@ -94,7 +98,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Recent Documents */}
-            <Card className="bg-[var(--card)] border-[var(--glass-border)]">
+            <Card className="bg-card border-border">
                 <CardHeader>
                     <CardTitle className="text-base font-semibold text-[var(--foreground)]">
                         Recent Documents

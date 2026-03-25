@@ -43,3 +43,17 @@ htmlcov/
 *.bak
 *.swp
 *.tmp
+
+# Tests and Debugging
+Backend/test_results.txt
+Backend/test_interactive_results.txt
+Backend/ddg_error.txt
+Backend/test_improved_rag.py
+Backend/test_improved_rag_file.py
+Backend/test_interactive_rag.py
+Backend/debug_web_search.py
+Backend/test_ddg_simple.py
+Backend/test_google_simple.py
+Backend/test_ddg_retry.py
+Backend/test_internet.py
+Backend/app/services/ddg_scraper.py

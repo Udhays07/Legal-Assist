@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { SendHorizontal } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
     onSend: (message: string) => void;
@@ -38,14 +39,14 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
     };
 
     return (
-        <div className="relative flex w-full items-end gap-2 bg-background border shadow-sm rounded-2xl p-2 px-3 focus-within:ring-1 focus-within:ring-primary/50 transition-shadow">
+        <div className="relative flex w-full items-end gap-2 bg-card/60 backdrop-blur-xl border border-border shadow-xl rounded-xl p-1.5 px-3 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/30 transition-all duration-300 group">
             <textarea
                 ref={textareaRef}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Message Legal Assistant..."
-                className="flex min-h-[44px] max-h-[200px] w-full bg-transparent px-3 py-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-y-auto"
+                placeholder="Enter your legal inquiry here..."
+                className="flex min-h-[36px] max-h-[150px] w-full bg-transparent px-1.5 py-1.5 text-sm text-foreground dark:text-white placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground/80 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
                 disabled={isLoading}
                 rows={1}
             />
@@ -54,10 +55,14 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
                     onClick={handleSend}
                     disabled={!content.trim() || isLoading}
                     size="icon"
-                    variant={content.trim() ? "default" : "secondary"}
-                    className="h-8 w-8 rounded-full transition-all"
+                    className={cn(
+                        "h-8 w-8 rounded-xl transition-all duration-300 shadow-md",
+                        content.trim() 
+                            ? "bg-primary text-primary-foreground hover:scale-105 active:scale-95 shadow-primary/20" 
+                            : "bg-muted text-muted-foreground opacity-40 shadow-none"
+                    )}
                 >
-                    <SendHorizontal className="h-4 w-4" />
+                    <SendHorizontal className={cn("h-5 w-5 transition-transform", content.trim() && "group-hover:translate-x-0.5 group-hover:-translate-y-0.5")} />
                     <span className="sr-only">Send</span>
                 </Button>
             </div>

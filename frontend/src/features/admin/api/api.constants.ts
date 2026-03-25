@@ -4,7 +4,7 @@
  * Defaults to http://localhost:8000 for local development.
  */
 export const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 /**
  * All API endpoint paths, grouped by resource.
@@ -12,6 +12,9 @@ export const API_BASE_URL =
  */
 export const API_ENDPOINTS = {
     health: "/health",
+    auth: {
+        users: "/auth/users",
+    },
 
     categories: {
         list: "/categories/",

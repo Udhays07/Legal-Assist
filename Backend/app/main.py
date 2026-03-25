@@ -117,7 +117,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+from app.api import auth
+
 # Register routers
+app.include_router(auth.router)
 app.include_router(category.router)
 app.include_router(document.router)
 app.include_router(embeddings_health.router)

@@ -5,11 +5,24 @@ This module provides REST API endpoints for user authentication, including
 login, logout, token refresh, password reset, and account management. It serves
 as the security gateway for the application, handling user credentials and
 session management with proper security measures.
-
-System Dependencies:
-- Depends on: core.security for authentication logic
-- Depends on: services.user_service for user operations
-- Depends on: schemas.user for request/response validation
-- Depended by: All protected API endpoints for authentication
-- Depended by: Frontend applications for user authentication
 """
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.models.admin import User
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.get("/users")
+def get_mock_users(db: Session = Depends(get_db)):
+    """Fetch all seeded users and their roles for the mock login gateway."""
+    users = db.query(User).all()
+    return [
+        {
+            "id": str(u.id),
+            "name": u.name,
+            "role": u.role.name if u.role else "user"
+        }
+        for u in users
+    ]
