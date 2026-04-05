@@ -64,130 +64,93 @@ def semantic_search(
     status: Optional[str] = "published"
 ) -> List[SearchResult]:
     """
-    Perform semantic search to find relevant documents.
-    
-    Args:
-        db: Database session
-        query: User's search query
-        top_k: Number of results to return (default: 5)
-        min_similarity: Minimum similarity threshold (0.0 to 1.0)
-        category_id: Optional filter by category
-        status: Optional filter by status (default: "published")
-    
-    Returns:
-        List[SearchResult]: List of search results with similarity scores
-    
-    Raises:
-        ValueError: If query is empty
-        Exception: If search fails
+    Perform hybrid search (Vector + Keyword) to find relevant documents.
+    Uses Reciprocal Rank Fusion (RRF) to combine results.
     """
     if not query or not query.strip():
         raise ValueError("Search query cannot be empty")
     
     try:
-        # Generate query embedding (with "query:" prefix for e5 model)
+        # 1. Vector Search (Semantic)
         logger.info(f"Generating embedding for query: '{query[:50]}...'")
         query_embedding = generate_embedding(query, is_query=True)
-        
-        # Convert embedding list to PostgreSQL array format string
         embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
         
-        # Build SQL query - embed the vector directly in SQL since pgvector doesn't support parameterized vectors
-        sql_base = f"""
-            SELECT 
-                d.id,
-                d.category_id,
-                d.title,
-                d.content,
-                d.tags,
-                d.metadata,
-                d.status,
-                d.created_at,
-                d.updated_at,
-                1 - (e.embedding <=> '{embedding_str}'::vector) as similarity
+        vector_sql = f"""
+            SELECT d.id, 1 - (e.embedding <=> '{embedding_str}'::vector) as score
             FROM documents d
             JOIN document_embeddings e ON d.id = e.document_id
             WHERE d.deleted_at IS NULL
-        """
-        
-        # Build WHERE clause conditions
-        where_conditions = []
-        params = {}
-        
-        if category_id:
-            where_conditions.append("d.category_id = :category_id")
-            params["category_id"] = str(category_id)
-        
-        if status:
-            where_conditions.append("d.status = :status")
-            params["status"] = status
-        
-        if min_similarity > 0:
-            where_conditions.append(f"(1 - (e.embedding <=> '{embedding_str}'::vector)) >= :min_similarity")
-            params["min_similarity"] = min_similarity
-        
-        # Add WHERE conditions if any
-        if where_conditions:
-            sql_base += " AND " + " AND ".join(where_conditions)
-        
-        # Add ORDER BY and LIMIT
-        sql_base += f"""
+            {"AND d.category_id = :category_id" if category_id else ""}
+            {"AND d.status = :status" if status else ""}
             ORDER BY e.embedding <=> '{embedding_str}'::vector
-            LIMIT :top_k
+            LIMIT :limit
         """
         
-        params["top_k"] = top_k
+        # 2. Keyword Search (Full-Text Search)
+        keyword_sql = """
+            SELECT d.id, ts_rank_cd(to_tsvector('english', d.title || ' ' || d.content), plainto_tsquery('english', :query)) as score
+            FROM documents d
+            WHERE d.deleted_at IS NULL
+            AND to_tsvector('english', d.title || ' ' || d.content) @@ plainto_tsquery('english', :query)
+            {"AND d.category_id = :category_id" if category_id else ""}
+            {"AND d.status = :status" if status else ""}
+            ORDER BY score DESC
+            LIMIT :limit
+        """
         
-        # Create text object
-        sql_query = text(sql_base)
-        
-        # Execute search
-        logger.info(f"Executing similarity search (top_k={top_k}, min_similarity={min_similarity})")
-        
-        try:
-            results = db.execute(sql_query, params).fetchall()
-        except Exception as pg_err:
-            logger.warning("pgvector error, falling back to basic text search.")
-            db.rollback()
+        # Adjust SQL for parameters
+        if category_id:
+            keyword_sql = keyword_sql.replace('{"AND d.category_id = :category_id" if category_id else ""}', "AND d.category_id = :category_id")
+        else:
+            keyword_sql = keyword_sql.replace('{"AND d.category_id = :category_id" if category_id else ""}', "")
             
-            # Simple fallback SQL without embeddings
-            sql_fallback = """
-                SELECT 
-                    id, category_id, title, content, tags, metadata, status, created_at, updated_at,
-                    1.0 as similarity
-                FROM documents d
-                WHERE deleted_at IS NULL
-                AND (title ILIKE :search_term OR content ILIKE :search_term)
-            """
-            params["search_term"] = f"%{query}%"
-            if category_id:
-                sql_fallback += " AND category_id = :category_id"
-            if status:
-                sql_fallback += " AND status = :status"
-            sql_fallback += f" LIMIT :top_k"
+        if status:
+            keyword_sql = keyword_sql.replace('{"AND d.status = :status" if status else ""}', "AND d.status = :status")
+        else:
+            keyword_sql = keyword_sql.replace('{"AND d.status = :status" if status else ""}', "")
+
+        params = {"query": query, "limit": top_k * 2, "category_id": str(category_id) if category_id else None, "status": status}
+        
+        # Execute both
+        vector_results = db.execute(text(vector_sql), params).fetchall()
+        keyword_results = db.execute(text(keyword_sql), params).fetchall()
+        
+        # 3. Reciprocal Rank Fusion (RRF)
+        # RRF score = sum(1 / (k + rank))
+        k = 60
+        scores = {} # doc_id -> rrf_score
+        
+        for rank, row in enumerate(vector_results, 1):
+            scores[row.id] = scores.get(row.id, 0) + (1.0 / (k + rank))
             
-            results = db.execute(text(sql_fallback), params).fetchall()
+        for rank, row in enumerate(keyword_results, 1):
+            scores[row.id] = scores.get(row.id, 0) + (1.0 / (k + rank))
+            
+        # Sort by RRF score
+        sorted_ids = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         
-        # Convert to SearchResult objects
-        search_results = []
-        for row in results:
-            # Create a Document object from the row
-            doc = Document(
-                id=row.id,
-                category_id=row.category_id,
-                title=row.title,
-                content=row.content,
-                tags=row.tags,
-                metadata_json=row.metadata,
-                status=row.status,
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-            )
-            search_results.append(SearchResult(doc, row.similarity))
+        if not sorted_ids:
+            return []
+            
+        # Fetch actual documents for the top IDs
+        doc_ids = [str(item[0]) for item in sorted_ids]
+        id_to_rrf = {item[0]: item[1] for item in sorted_ids}
         
-        logger.info(f"Found {len(search_results)} relevant documents")
+        docs = db.query(Document).filter(Document.id.in_(doc_ids)).all()
         
-        return search_results
+        # Map back to SearchResults and maintain RRF order
+        doc_map = {doc.id: doc for doc in docs}
+        results = []
+        for doc_id, rrf_score in sorted_ids:
+            if doc_id in doc_map:
+                # We normalize RRF score back to a 0-1 range roughly for UI compatibility
+                # Max possible RRF score with 2 lists is 2 * (1/61) ≈ 0.032
+                normalized_score = min(rrf_score * 30, 1.0) 
+                results.append(SearchResult(doc_map[doc_id], normalized_score))
+        
+        logger.info(f"Hybrid search found {len(results)} relevant documents using RRF")
+        return results
         
     except ValueError as e:
         logger.error(f"Validation error: {str(e)}")

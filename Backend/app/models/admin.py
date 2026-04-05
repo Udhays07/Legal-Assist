@@ -81,6 +81,11 @@ class Document(Base):
     embedding = relationship("DocumentEmbedding", uselist=False, back_populates="document")
     __table_args__ = (
         Index("ix_documents_tags", "tags", postgresql_using="gin"),
+        Index(
+            "ix_documents_fts",
+            func.to_tsvector("english", title + " " + content),
+            postgresql_using="gin",
+        ),
     )
 
 class DocumentEmbedding(Base):
