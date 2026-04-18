@@ -102,16 +102,20 @@ class RAGService:
                 return self._handle_off_topic(user_query, user_id, conversation_id, start_time)
             
             # Step 2: Process LEGAL_QUERY (enhanced RAG)
-            # 2a: Retrieve from local database
+            # 2a: Expand query for better retrieval
+            expanded_query = self._expand_query(user_query)
+            logger.info(f"Expanded query: '{expanded_query[:100]}...'")
+            
+            # 2b: Retrieve from local database using hybrid search
             search_results = semantic_search(
                 db=self.db,
-                query=user_query,
+                query=expanded_query, # Use expanded query for search
                 top_k=top_k,
                 min_similarity=min_similarity,
                 category_id=category_id
             )
             
-            # 2b: Perform web search for cross-verification
+            # 2c: Perform web search for cross-verification (use original query for web)
             web_results = perform_web_search(user_query, max_results=3)
             
             if not search_results and not web_results:
@@ -197,6 +201,29 @@ class RAGService:
         if "OFF_TOPIC" in response:
             return "OFF_TOPIC"
         return "LEGAL_QUERY"
+
+    def _expand_query(self, query: str) -> str:
+        """Expand user query into a more descriptive legal search prompt."""
+        expansion_prompt = f"""
+        As a legal expert, expand the following short user query into a descriptive search phrase 
+        that includes relevant legal keywords, acronyms, and related concepts to improve 
+        document retrieval.
+        
+        User Query: {query}
+        
+        Expanded Search Phrase (return only the phrase):
+        """
+        try:
+            expanded = self.llm.generate(
+                prompt=expansion_prompt,
+                temperature=0.3,
+                max_tokens=60
+            ).strip().strip('"')
+            # Combine original and expanded for better coverage
+            return f"{query} {expanded}"
+        except Exception as e:
+            logger.warning(f"Query expansion failed: {str(e)}, falling back to original query")
+            return query
 
     def _handle_greeting(
         self,
@@ -339,27 +366,25 @@ class RAGService:
 
     def _format_context(self, search_results: List[SearchResult]) -> str:
         """
-        Format retrieved documents into context string.
-        
-        Args:
-            search_results: List of search results
-        
-        Returns:
-            str: Formatted context
+        Format retrieved documents into context string with enrichment.
         """
         context_parts = []
         
         for idx, result in enumerate(search_results, 1):
-            # Truncate content if too long (use constant)
+            # Get category title if available
+            category_info = ""
+            if result.document.category:
+                category_info = f" | Category: {result.document.category.title}"
+            
+            # Prepend metadata to content for better grounding
+            header = f"[Document {idx}: {result.title}{category_info}]"
+            
+            # Truncate content if too long
             content = result.content[:RAG_CONTEXT_PREVIEW_LENGTH]
             if len(result.content) > RAG_CONTEXT_PREVIEW_LENGTH:
                 content += "..."
             
-            context_parts.append(
-                f"Document {idx}: {result.title}\n"
-                f"Relevance: {result.similarity:.2%}\n"
-                f"Content: {content}\n"
-            )
+            context_parts.append(f"{header}\nContent: {content}\n")
         
         return "\n---\n".join(context_parts)
     

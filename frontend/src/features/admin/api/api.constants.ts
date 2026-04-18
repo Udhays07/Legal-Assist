@@ -13,7 +13,9 @@ export const API_BASE_URL =
 export const API_ENDPOINTS = {
     health: "/health",
     auth: {
-        users: "/auth/users",
+        login: "/auth/login",
+        register: "/auth/register",
+        me: "/auth/me",
     },
 
     categories: {

@@ -1,38 +1,82 @@
+"""
+Database seeding script for initial setup.
+
+Seeds:
+  - Roles: 'admin' and 'user'
+  - Admin account: admin@legalassist.ai / 1234 (bcrypt hashed)
+  - Default categories: Criminal Law, Civil Rights, Family Law, Corporate Law
+
+Run this AFTER running 'alembic upgrade head'.
+Usage:
+    cd Backend
+    venv\\Scripts\\python seed_db.py
+"""
+
+import sys
+import os
+
+# Ensure the Backend directory is on sys.path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from app.core.database import SessionLocal
-from app.models.admin import User, Category, Role
-import uuid
+from app.models.admin import Category, Role, User
+from app.core.security import hash_password
+
+ADMIN_EMAIL = "admin@legalassist.ai"
+ADMIN_PASSWORD = "1234"
+ADMIN_NAME = "Administrator"
+
+CATEGORIES = [
+    ("Criminal Law", "Matters related to Criminal Law"),
+    ("Civil Rights", "Matters related to Civil Rights"),
+    ("Family Law", "Matters related to Family Law"),
+    ("Corporate Law", "Matters related to Corporate Law"),
+    ("Property Law", "Matters related to Property Law"),
+    ("Constitutional Law", "Matters related to Constitutional Law"),
+]
+
 
 def seed():
     db = SessionLocal()
     try:
-        role_name = "user"
-        role = db.query(Role).filter(Role.name == role_name).first()
-        if not role:
-            role = Role(name=role_name)
-            db.add(role)
-            db.flush()
-            
-        mock_user_id = uuid.UUID('123e4567-e89b-12d3-a456-426614174000')
-        user = db.query(User).filter(User.id == mock_user_id).first()
-        if not user:
-            user = User(id=mock_user_id, name="Mock User", role_id=role.id)
-            db.add(user)
-            db.commit()
-            print("Mock user created.")
-            
-        categories = ["Criminal Law", "Civil Rights", "Family Law", "Corporate Law"]
-        for cat_str in categories:
-            cat = db.query(Category).filter(Category.title == cat_str).first()
-            if not cat:
-                c = Category(title=cat_str, description=f"Matters related to {cat_str}")
-                db.add(c)
+        # ── Roles ─────────────────────────────────────────────────────────
+        for role_name in ("admin", "user"):
+            if not db.query(Role).filter(Role.name == role_name).first():
+                db.add(Role(name=role_name))
+        db.flush()
+        print("[OK] Roles seeded.")
+
+        # -- Admin account -------------------------------------------------
+        admin_role = db.query(Role).filter(Role.name == "admin").first()
+        existing_admin = db.query(User).filter(User.email == ADMIN_EMAIL).first()
+        if not existing_admin:
+            admin_user = User(
+                name=ADMIN_NAME,
+                email=ADMIN_EMAIL,
+                password_hash=hash_password(ADMIN_PASSWORD),
+                role_id=admin_role.id,
+            )
+            db.add(admin_user)
+            print(f"[OK] Admin account created: {ADMIN_EMAIL} / {ADMIN_PASSWORD}")
+        else:
+            print(f"[--] Admin account already exists: {ADMIN_EMAIL}")
+
+        # -- Categories ----------------------------------------------------
+        for title, description in CATEGORIES:
+            if not db.query(Category).filter(Category.title == title).first():
+                db.add(Category(title=title, description=description))
+        print("[OK] Categories seeded.")
+
         db.commit()
-        print("Categories created.")
+        print("\n[DONE] Database seeding complete.")
+
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"[ERROR] Error during seeding: {e}")
         db.rollback()
+        raise
     finally:
         db.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     seed()

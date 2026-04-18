@@ -3,122 +3,264 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Shield, Sparkles, User, ArrowRight, Loader2 } from "lucide-react";
+import { Sparkles, ArrowRight, Loader2, Scale, ShieldCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { API_BASE_URL, API_ENDPOINTS } from "@/features/admin/api/api.constants";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { saveAuth, getToken, getRole, isAdmin, clearAuth } from "@/lib/auth";
+import { apiLogin, apiRegister } from "@/lib/api/auth";
 
-interface MockUser {
-  id: string;
-  name: string;
-  role: string;
-}
+type Tab = "login" | "signup";
 
-export default function LoginGateway() {
+export default function AuthPage() {
   const router = useRouter();
-  const [isNavigating, setIsNavigating] = useState<string | null>(null);
-  const [users, setUsers] = useState<MockUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
 
+  // Tab state
+  const [tab, setTab] = useState<Tab>("login");
+
+  // Form fields
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // UI state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [guestLoading, setGuestLoading] = useState(false);
+
+  // Auto-redirect if already authenticated
   useEffect(() => {
-    fetch(`${API_BASE_URL}${API_ENDPOINTS.auth.users}`)
-      .then(res => res.json())
-      .then(data => {
-        setUsers(data);
-        setLoadingUsers(false);
-      })
-      .catch(err => {
-        console.error("Failed to load users:", err);
-        setLoadingUsers(false);
-      });
-  }, []);
+    const token = getToken();
+    if (token) {
+      const role = getRole();
+      if (role === "admin") {
+        router.replace("/admin");
+      } else {
+        router.replace("/user");
+      }
+    }
+  }, [router]);
 
-  const handleLogin = (role: "user" | "admin") => {
-    setIsNavigating(role);
-    const userMatched = users.find(u => u.role === role);
-    const validId = userMatched?.id || "123e4567-e89b-12d3-a456-426614174000"; // Fallback safety
-    
-    // Set the corresponding ID in localStorage based on role
-    localStorage.setItem("legal_assist_user_id", validId);
-    
-    if (role === "admin") {
-      router.push("/admin");
-    } else {
-      router.push("/user");
+  const resetError = () => setError(null);
+
+  // ── Login ──────────────────────────────────────────────────────────────
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiLogin(email, password);
+      saveAuth({
+        token: data.access_token,
+        role: data.role,
+        name: data.name,
+        userId: data.user_id,
+      });
+      if (data.role === "admin") {
+        router.push("/admin");
+      } else {
+        router.push("/user");
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
+  // ── Register ───────────────────────────────────────────────────────────
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError("Please enter your full name.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiRegister(name, email, password);
+      saveAuth({
+        token: data.access_token,
+        role: data.role,
+        name: data.name,
+        userId: data.user_id,
+      });
+      router.push("/user");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Guest ──────────────────────────────────────────────────────────────
+  const handleGuest = () => {
+    setGuestLoading(true);
+    clearAuth(); // clear any stale state
+    router.push("/user");
+  };
+
   return (
-    <div className="flex flex-col min-h-screen bg-background relative overflow-hidden">
-      {/* Top Bar for Theme Toggle */}
-      <div className="absolute top-0 right-0 p-6 z-20">
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4">
+      {/* Theme toggle */}
+      <div className="absolute right-0 top-0 p-6 z-20">
         <ThemeToggle />
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center relative p-6 w-full max-w-5xl mx-auto z-10">
-        <div className="text-center mb-12 space-y-4">
-          <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-2xl mb-2">
-            <Sparkles className="h-10 w-10 text-primary" />
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground font-[family-name:var(--font-headline)]">
-            Legal Assistant AI
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-md mx-auto">
-            Select your role to access the intelligent know-your-rights framework.
-          </p>
+      {/* Decorative background glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      >
+        <div className="absolute -top-32 left-1/2 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-[300px] w-[400px] rounded-full bg-blue-500/5 blur-3xl" />
+      </div>
+
+      {/* Header */}
+      <div className="mb-8 flex flex-col items-center gap-3 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+          <Scale className="h-8 w-8 text-primary" />
+        </div>
+        <h1 className="text-4xl font-bold tracking-tight text-foreground md:text-5xl">
+          Legal Assistant AI
+        </h1>
+        <p className="max-w-sm text-base text-muted-foreground">
+          Your AI-powered know-your-rights companion. Sign in or continue as a guest.
+        </p>
+      </div>
+
+      {/* Card */}
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-lg">
+        {/* Tab switcher */}
+        <div className="mb-6 flex rounded-xl bg-muted p-1">
+          <button
+            id="tab-login"
+            onClick={() => { setTab("login"); resetError(); }}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-all ${tab === "login"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Login
+          </button>
+          <button
+            id="tab-signup"
+            onClick={() => { setTab("signup"); resetError(); }}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-all ${tab === "signup"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
+          >
+            <UserPlus className="h-4 w-4" />
+            Sign Up
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
-          {/* User Card */}
-          <div className="relative group rounded-2xl border border-border bg-card p-8 hover:border-primary/50 transition-all shadow-sm hover:shadow-md flex flex-col items-center text-center">
-            <div className="h-16 w-16 bg-blue-500/10 text-blue-500 rounded-full flex items-center justify-center mb-6">
-              <User className="h-8 w-8" />
+        {/* Form */}
+        <form
+          id={tab === "login" ? "form-login" : "form-signup"}
+          onSubmit={tab === "login" ? handleLogin : handleRegister}
+          className="flex flex-col gap-4"
+        >
+          {/* Name — sign up only */}
+          {tab === "signup" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="input-name">Full Name</Label>
+              <Input
+                id="input-name"
+                type="text"
+                placeholder="John Doe"
+                value={name}
+                onChange={(e) => { setName(e.target.value); resetError(); }}
+                required
+                autoComplete="name"
+              />
             </div>
-            <h2 className="text-2xl font-semibold text-foreground mb-3">Login as User</h2>
-            <p className="text-muted-foreground text-sm mb-8 flex-1">
-              Access the AI Chat Assistant, query legal documents, and explore your rights securely.
-            </p>
-            <Button 
-              onClick={() => handleLogin("user")} 
-              disabled={isNavigating !== null || loadingUsers}
-              className="w-full gap-2 transition-all p-6 text-base"
-              variant={isNavigating === "admin" ? "secondary" : "default"}
-            >
-              {isNavigating === "user" || loadingUsers ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  Continue as User <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="input-email">Email</Label>
+            <Input
+              id="input-email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); resetError(); }}
+              required
+              autoComplete="email"
+            />
           </div>
 
-          {/* Admin Card */}
-          <div className="relative group rounded-2xl border border-border bg-card p-8 hover:border-primary/50 transition-all shadow-sm hover:shadow-md flex flex-col items-center text-center">
-            <div className="h-16 w-16 bg-purple-500/10 text-purple-500 rounded-full flex items-center justify-center mb-6">
-              <Shield className="h-8 w-8" />
-            </div>
-            <h2 className="text-2xl font-semibold text-foreground mb-3">Login as Admin</h2>
-            <p className="text-muted-foreground text-sm mb-8 flex-1">
-              Access the Dashboard, manage legal categories, view system metrics, and upload documents.
-            </p>
-            <Button 
-              onClick={() => handleLogin("admin")} 
-              disabled={isNavigating !== null || loadingUsers}
-              className="w-full gap-2 transition-all p-6 text-base"
-              variant={isNavigating === "user" ? "secondary" : "default"}
-            >
-              {isNavigating === "admin" || loadingUsers ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  Continue as Admin <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="input-password">Password</Label>
+            <Input
+              id="input-password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); resetError(); }}
+              required
+              autoComplete={tab === "login" ? "current-password" : "new-password"}
+            />
           </div>
+
+          {/* Inline error */}
+          {error && (
+            <p
+              id="auth-error"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {error}
+            </p>
+          )}
+
+          <Button
+            id="btn-submit"
+            type="submit"
+            disabled={loading}
+            className="mt-1 w-full gap-2 py-5 text-base"
+          >
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                {tab === "login" ? "Login" : "Create Account"}
+                <Sparkles className="h-4 w-4" />
+              </>
+            )}
+          </Button>
+        </form>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-4">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
-      </main>
+
+        {/* Guest CTA */}
+        <Button
+          id="btn-guest"
+          variant="outline"
+          disabled={guestLoading}
+          onClick={handleGuest}
+          className="w-full gap-2 py-5 text-base text-white"
+        >
+          {guestLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <>
+              Continue without login
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
+        </Button>
+
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          Guest access provides limited features. Sign up for a full experience.
+        </p>
+      </div>
     </div>
   );
 }

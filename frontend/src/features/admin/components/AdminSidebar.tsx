@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
-import { LayoutDashboard, Tag, FileText, Scale } from "lucide-react";
+import { LayoutDashboard, Tag, FileText, Scale, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clearAuth } from "@/lib/auth";
+import { useRouter } from "next/navigation";
 
 interface NavItem {
   label: string;
@@ -20,6 +22,12 @@ const navItems: NavItem[] = [
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    clearAuth();
+    router.push("/");
+  };
 
   return (
     <aside className="w-[240px] shrink-0 flex flex-col sticky top-0 h-screen overflow-y-auto bg-card border-r border-border backdrop-blur-xl px-3 py-5 gap-1">
@@ -72,6 +80,13 @@ export default function AdminSidebar() {
 
       {/* Footer */}
       <div className="flex flex-col gap-2 mt-auto">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-destructive hover:bg-destructive/10 transition-all duration-150 group"
+        >
+          <LogOut size={17} className="shrink-0 opacity-85 group-hover:translate-x-0.5 transition-transform" />
+          <span className="flex-1 text-left">Logout</span>
+        </button>
         <Separator className="bg-border" />
         <p className="text-[0.68rem] text-muted-foreground text-center opacity-40 py-1">
           S8 Legal Solutions © 2026

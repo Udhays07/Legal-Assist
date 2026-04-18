@@ -46,23 +46,23 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Enter your legal inquiry here..."
-                className="flex min-h-[36px] max-h-[150px] w-full bg-transparent px-1.5 py-1.5 text-sm text-foreground dark:text-white placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground/80 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
+                className="flex min-h-[32px] max-h-[150px] w-full bg-transparent px-1 py-1.5 text-sm text-foreground dark:text-white placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground/80 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
                 disabled={isLoading}
                 rows={1}
             />
-            <div className="flex h-[44px] shrink-0 items-center">
+            <div className="flex h-[38px] shrink-0 items-center">
                 <Button
                     onClick={handleSend}
                     disabled={!content.trim() || isLoading}
                     size="icon"
                     className={cn(
-                        "h-8 w-8 rounded-xl transition-all duration-300 shadow-md",
+                        "h-7 w-7 rounded-lg transition-all duration-300 shadow-md",
                         content.trim() 
                             ? "bg-primary text-primary-foreground hover:scale-105 active:scale-95 shadow-primary/20" 
                             : "bg-muted text-muted-foreground opacity-40 shadow-none"
                     )}
                 >
-                    <SendHorizontal className={cn("h-5 w-5 transition-transform", content.trim() && "group-hover:translate-x-0.5 group-hover:-translate-y-0.5")} />
+                    <SendHorizontal className={cn("h-3.5 w-3.5 transition-transform", content.trim() && "group-hover:translate-x-0.5 group-hover:-translate-y-0.5")} />
                     <span className="sr-only">Send</span>
                 </Button>
             </div>

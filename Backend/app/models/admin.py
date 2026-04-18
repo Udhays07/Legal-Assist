@@ -35,6 +35,8 @@ class User(Base):
     __tablename__ = "users"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, unique=True, nullable=False)
     name = Column(String, nullable=False)
+    email = Column(String, nullable=True, unique=True, index=True)
+    password_hash = Column(String, nullable=True)
     role_id = Column(UUID(as_uuid=True), ForeignKey("roles.id"), nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
@@ -81,6 +83,11 @@ class Document(Base):
     embedding = relationship("DocumentEmbedding", uselist=False, back_populates="document")
     __table_args__ = (
         Index("ix_documents_tags", "tags", postgresql_using="gin"),
+        Index(
+            "ix_documents_fts",
+            func.to_tsvector("english", title + " " + content),
+            postgresql_using="gin",
+        ),
     )
 
 class DocumentEmbedding(Base):
